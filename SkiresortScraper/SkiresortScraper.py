@@ -94,6 +94,26 @@ def get_basic_resort_statistics(resortUrl):
     # Extract the HTML
     resortHtml = BeautifulSoup(resortContent, 'html.parser')
 
+    # Initialize logo_url and resort_website
+    logo_url = None
+    resort_website = None
+
+    # Extract the logo URL and resort website
+    logo_element = resortHtml.find("div", {"class": "resort-logo"})
+    if logo_element:
+        # Extract the logo URL
+        img_tag = logo_element.find("img")
+        if img_tag and 'src' in img_tag.attrs:
+            logo_url = img_tag['src']
+            # Prepend the base URL if it's a relative path
+            if logo_url.startswith('/'):
+                logo_url = f"https://www.skiresort.info{logo_url}"
+        
+        # Extract the resort website
+        a_tag = logo_element.find("a")
+        if a_tag and 'href' in a_tag.attrs:
+            resort_website = a_tag['href']
+
     # Get altitude info
     if (resortHtml.find("div", {"id": "selAlti"}) != None):
         altitudeDescipriton = resortHtml.find("div", {"id": "selAlti"}).contents
@@ -108,7 +128,7 @@ def get_basic_resort_statistics(resortUrl):
     print("Altitude: " + str(altitude))
 
     # Add the altitude to the dictionary
-    stat = {"Altitude":altitude}
+    stat = {"Altitude": altitude}
 
     # Get slope statistics
     slopeTable = resortHtml.find("table", {"class": "run-table"})
@@ -184,6 +204,8 @@ def get_basic_resort_statistics(resortUrl):
     stat["Youth"] = youthPrices 
     stat["Child"] = childPrices
     stat["Currency"] = currency
+    stat["Logo URL"] = logo_url
+    stat["Website"] = resort_website
 
     return stat, liftStatistics
 
@@ -326,14 +348,21 @@ if __name__ == '__main__':
                 # Get the report scores
                 scores = get_report_scores(resortUrl)
 
+                altitude = stat["Altitude"]
+                logo_url = stat["Logo URL"]
+                resort_website = stat["Website"]
+
                 newResort = {
                     "Resort Name": resortName,
                     "Continent": continent,
                     "Country": country,
                     "State/Province": province_state,  # Now defined
                     "URL": resortUrl,
-                    **stat,
-                    **scores
+                    "Altitude": altitude,
+                    "Logo URL": logo_url,  # Add logo URL
+                    "Website": resort_website,  # Add resort website
+                    **stat,  # Include slope statistics
+                    **scores,  # Include report scores
                 }
 
                 # Add lift statistics to the newResort dictionary
