@@ -88,7 +88,6 @@ def get_basic_resort_statistics(resortUrl):
     """
     Print the basic statistics for the ski resort.
     """
-
     # Get the contents of the ski resort page.
     resortContent = get_html_content(resortUrl)
 
@@ -111,17 +110,18 @@ def get_basic_resort_statistics(resortUrl):
     # Add the altitude to the dictionary
     stat = {"Altitude":altitude}
 
-    # Get Slope statistics
+    # Get slope statistics
     slopeTable = resortHtml.find("table", {"class": "run-table"})
     slopeSatistics = {}
     print("Slope Statistics:")
     if (slopeTable is not None):
         for row in slopeTable.findAll("tr"):
+            print(row)  # Debugging output to see the row structure
             if len(row.contents) >= 3:  # Ensure there are at least 3 contents
                 key = row.contents[0].text.strip()  # Get the description
-                distance_text = row.contents[1].text.strip()  # Get the distance text
+                distance_text = row.find("td", {"class": "distance"}).text.strip()  # Get the distance text
                 
-                print("distance_text", distance_text)
+                print("distance_text:", distance_text)  # Debugging output
                 # Check if distance_text is not empty and contains "km"
                 if distance_text and "km" in distance_text:
                     value = float(distance_text.split("km")[0].strip())  # Get the distance value
@@ -132,20 +132,29 @@ def get_basic_resort_statistics(resortUrl):
             else:
                 print("Unexpected structure in row:", row)
                 
-    # Extract the Lift details.
+    # Extract lift numbers
     liftStatistics = {}
     print("Lift numbers:")
-    for lift in resortHtml.findAll("div", {"class": "lift-count"}):
-        key = lift['title']
-        if (lift.get_text().isnumeric()):
-            value = int(lift.get_text())
-        else:
-            value = 0
-        liftStatistics[key] = value
+    liftGroups = resortHtml.findAll("div", {"class": "lift-info-group"})  # Find all lift info groups
 
-        print(key,": ",value)
-        stat[key] = value
+    if liftGroups:
+        for lift in liftGroups:
+            # Find all lift counts within the lift group
+            lift_counts = lift.findAll("div", {"class": "lift-count"})
+            
+            for lift_count in lift_counts:
+                lift_type = lift_count.get("title")  # Get the lift type from the title attribute
+                lift_amount = lift_count.find("span", {"class": "lift-amount"})  # Find the amount
                 
+                if lift_amount:
+                    count = lift_amount.text.strip()  # Get the lift count
+                    print(f"{lift_type}: {count}")  # Debugging output
+                    liftStatistics[lift_type] = int(count) if count.isdigit() else 0  # Store lift count in liftStatistics
+                else:
+                    print("Lift amount not found in lift count:", lift_count)
+    else:
+        print("Lift table not found or has unexpected structure.")
+
     # Extract the ticket prices
     currency = None
     if not resortHtml.findAll("td", {"id": "selTicketA"}):
@@ -176,7 +185,7 @@ def get_basic_resort_statistics(resortUrl):
     stat["Child"] = childPrices
     stat["Currency"] = currency
 
-    return stat
+    return stat, liftStatistics
 
 
 def get_report_scores(resortUrl):
@@ -227,6 +236,9 @@ if __name__ == '__main__':
     resortData = dict()
     index = 0
 
+    # Initialize a list to hold all resort data
+    resort_data_list = []
+
     for page in range(totalPages):        
 
         # Consruct the next page with the list of ski resorts.
@@ -272,10 +284,12 @@ if __name__ == '__main__':
                 slopeTable = resort.find("table", {"class": "run-table"})
                 if slopeTable:
                     for row in slopeTable.findAll("tr"):
+                        print(row)  # Debugging output to see the row structure
                         if len(row.contents) >= 3:  # Ensure there are at least 3 contents
                             key = row.contents[0].text.strip()  # Get the description
-                            distance_text = row.contents[1].text.strip()  # Get the distance text
+                            distance_text = row.find("td", {"class": "distance"}).text.strip()  # Get the distance text
                             
+                            print("distance_text:", distance_text)  # Debugging output
                             # Check if distance_text is not empty and contains "km"
                             if distance_text and "km" in distance_text:
                                 value = float(distance_text.split("km")[0].strip())  # Get the distance value
@@ -286,13 +300,28 @@ if __name__ == '__main__':
                         else:
                             print("Unexpected structure in row:", row)
 
+                # Extract lift numbers
+                liftStatistics = {}
+                print("Lift numbers:")
+                liftTable = resort.find("table", {"class": "lift-table"})  # Adjust the class name based on actual HTML
+                if liftTable:
+                    for row in liftTable.findAll("tr"):
+                        if len(row.contents) >= 2:  # Ensure there are at least 2 contents
+                            lift_type = row.contents[0].text.strip()  # Get the lift type
+                            lift_count = row.contents[1].text.strip()  # Get the lift count
+                            
+                            print(f"{lift_type}: {lift_count}")  # Debugging output
+                            liftStatistics[lift_type] = int(lift_count) if lift_count.isdigit() else 0  # Store lift count in liftStatistics
+                else:
+                    print("Lift table not found or has unexpected structure.")
+
                 # Get the URL for each resort
                 resortUrl = resort.find("a", {"class": "pull-right btn btn-default btn-sm"})['href']
                 resortName = resortUrl.split('/')[-2]
                 print("Looking at Resort: ", resortUrl)
                 
                 # Get the contents of the ski resort page.
-                stat = get_basic_resort_statistics(resortUrl)
+                stat, liftStatistics = get_basic_resort_statistics(resortUrl)
 
                 # Get the report scores
                 scores = get_report_scores(resortUrl)
@@ -307,12 +336,17 @@ if __name__ == '__main__':
                     **scores
                 }
 
+                # Add lift statistics to the newResort dictionary
+                for lift_type, count in liftStatistics.items():
+                    newResort[lift_type] = count  # Add each lift type and its count
+
                 print("Resort data: ", newResort)
 
-                # Add all the data to the dataframe
-                resortData[resortName] = newResort
+                # Add the resort data to the list
+                resort_data_list.append(newResort)
 
-    df = pd.DataFrame.from_dict(resortData, orient='index')
+    # After the loop, create a DataFrame and save to Excel
+    df = pd.DataFrame(resort_data_list)
     df.to_excel('skiResort.xlsx', sheet_name='sheet1', index=False)
     
     # Extract the dollar symbol from the price
