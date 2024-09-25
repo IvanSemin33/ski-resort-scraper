@@ -84,6 +84,33 @@ def get_number_of_pages(url):
     # should check for valid 
     return lastPageNumber
 
+def get_interactive_trail_map(resortName):
+    """
+    Get the interactive trail map link for the resort.
+    """
+    # Construct the URL for the trail map
+    trail_map_url = f"https://www.skiresort.info/ski-resort/{resortName}/trail-map/"
+    
+    # Get the contents of the trail map page
+    trail_map_content = get_html_content(trail_map_url)
+    trail_map_html = BeautifulSoup(trail_map_content, 'html.parser')
+
+    # Initialize the trail map link
+    trail_map_link = None
+
+    # Find the interactive trail map section
+    trail_map_section = trail_map_html.find("div", {"class": "panel panel-default"})
+    if trail_map_section:
+        # Look for the list of links
+        list_group = trail_map_section.find("ul", {"class": "list-group"})
+        if list_group:
+            # Extract the first link (or modify to extract specific links as needed)
+            first_link = list_group.find("a", {"class": "more-infos"})
+            if first_link and 'href' in first_link.attrs:
+                trail_map_link = first_link['href']
+
+    return trail_map_link
+
 def get_basic_resort_statistics(resortUrl):
     """
     Print the basic statistics for the ski resort.
@@ -94,25 +121,29 @@ def get_basic_resort_statistics(resortUrl):
     # Extract the HTML
     resortHtml = BeautifulSoup(resortContent, 'html.parser')
 
-    # Initialize logo_url and resort_website
+    # Initialize logo_url, resort_website, and trail_map_link
     logo_url = None
     resort_website = None
+    trail_map_link = None
 
     # Extract the logo URL and resort website
     logo_element = resortHtml.find("div", {"class": "resort-logo"})
     if logo_element:
-        # Extract the logo URL
         img_tag = logo_element.find("img")
         if img_tag and 'src' in img_tag.attrs:
             logo_url = img_tag['src']
-            # Prepend the base URL if it's a relative path
             if logo_url.startswith('/'):
                 logo_url = f"https://www.skiresort.info{logo_url}"
         
-        # Extract the resort website
         a_tag = logo_element.find("a")
         if a_tag and 'href' in a_tag.attrs:
             resort_website = a_tag['href']
+
+    # Get the resort name for the trail map link
+    resortName = resortUrl.split('/')[-2]
+
+    # Get the interactive trail map link
+    trail_map_link = get_interactive_trail_map(resortName)
 
     # Get altitude info
     if (resortHtml.find("div", {"id": "selAlti"}) != None):
@@ -128,7 +159,7 @@ def get_basic_resort_statistics(resortUrl):
     print("Altitude: " + str(altitude))
 
     # Add the altitude to the dictionary
-    stat = {"Altitude": altitude}
+    stat = {"Altitude": altitude, "Trail Map": trail_map_link}  # Add trail map link
 
     # Get slope statistics
     slopeTable = resortHtml.find("table", {"class": "run-table"})
@@ -249,11 +280,11 @@ if __name__ == '__main__':
     # http://www.skiresort.info/ski-resorts/page/<index>/
     
     # Sk resort website url
-    url = 'https://www.skiresort.info/ski-resorts/'
+    url = 'https://www.skiresort.info/ski-resorts/europe/'
     
     # totalPages = get_number_of_pages(url)
-    totalPages = 1 # restict to first page while testing.
-    totalResorts = 3
+    totalPages = 2 # restict to first page while testing.
+    totalResorts = 4
 
     resortData = dict()
     index = 0
@@ -351,16 +382,18 @@ if __name__ == '__main__':
                 altitude = stat["Altitude"]
                 logo_url = stat["Logo URL"]
                 resort_website = stat["Website"]
+                trail_map_link = stat["Trail Map"]
 
                 newResort = {
                     "Resort Name": resortName,
                     "Continent": continent,
                     "Country": country,
-                    "State/Province": province_state,  # Now defined
+                    "State/Province": province_state,  
                     "URL": resortUrl,
                     "Altitude": altitude,
-                    "Logo URL": logo_url,  # Add logo URL
-                    "Website": resort_website,  # Add resort website
+                    "Logo URL": logo_url,  
+                    "Website": resort_website, 
+                    "Trail Map": trail_map_link,  
                     **stat,  # Include slope statistics
                     **scores,  # Include report scores
                 }
