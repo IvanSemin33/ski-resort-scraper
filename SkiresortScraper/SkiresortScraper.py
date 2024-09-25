@@ -84,12 +84,12 @@ def get_number_of_pages(url):
     # should check for valid 
     return lastPageNumber
 
-def get_interactive_trail_map(resortName):
+def get_interactive_trail_map(id):
     """
     Get the interactive trail map link for the resort.
     """
     # Construct the URL for the trail map
-    trail_map_url = f"https://www.skiresort.info/ski-resort/{resortName}/trail-map/"
+    trail_map_url = f"https://www.skiresort.info/ski-resort/{id}/trail-map/"
     
     # Get the contents of the trail map page
     trail_map_content = get_html_content(trail_map_url)
@@ -121,10 +121,15 @@ def get_basic_resort_statistics(resortUrl):
     # Extract the HTML
     resortHtml = BeautifulSoup(resortContent, 'html.parser')
 
-    # Initialize logo_url, resort_website, and trail_map_link
+    # Initialize logo_url, resort_website, trail_map_link, description, id, and resort_name
     logo_url = None
     resort_website = None
     trail_map_link = None
+    description = None
+
+    # Extract the resort name
+    resort_name_element = resortHtml.find("h1").find("span", {"class": "fn"})
+    resort_name = resort_name_element.get_text(strip=True) if resort_name_element else "Unknown"
 
     # Extract the logo URL and resort website
     logo_element = resortHtml.find("div", {"class": "resort-logo"})
@@ -139,11 +144,18 @@ def get_basic_resort_statistics(resortUrl):
         if a_tag and 'href' in a_tag.attrs:
             resort_website = a_tag['href']
 
-    # Get the resort name for the trail map link
-    resortName = resortUrl.split('/')[-2]
+    # Get the resort id for the trail map link
+    id = resortUrl.split('/')[-2]  # Renamed from resortName to id
 
     # Get the interactive trail map link
-    trail_map_link = get_interactive_trail_map(resortName)
+    trail_map_link = get_interactive_trail_map(id)
+
+    # Extract the description
+    description_element = resortHtml.find("p", {"class": "p_before_list"})
+    if description_element:
+        js_more_text = description_element.find("span", {"class": "js-more-text"})
+        if js_more_text:
+            description = js_more_text.get_text(strip=True)
 
     # Get altitude info
     if (resortHtml.find("div", {"id": "selAlti"}) != None):
@@ -158,8 +170,14 @@ def get_basic_resort_statistics(resortUrl):
 
     print("Altitude: " + str(altitude))
 
-    # Add the altitude to the dictionary
-    stat = {"Altitude": altitude, "Trail Map": trail_map_link}  # Add trail map link
+    # Add the altitude, description, trail map link, resort name, and id to the dictionary
+    stat = {
+        "Altitude": altitude,
+        "Description": description,  # Add description
+        "Trail Map": trail_map_link,
+        "ID": id,  # Add id to the dictionary
+        "Resort Name": resort_name  # Add resort name to the dictionary
+    }
 
     # Get slope statistics
     slopeTable = resortHtml.find("table", {"class": "run-table"})
@@ -370,7 +388,7 @@ if __name__ == '__main__':
 
                 # Get the URL for each resort
                 resortUrl = resort.find("a", {"class": "pull-right btn btn-default btn-sm"})['href']
-                resortName = resortUrl.split('/')[-2]
+
                 print("Looking at Resort: ", resortUrl)
                 
                 # Get the contents of the ski resort page.
@@ -383,9 +401,13 @@ if __name__ == '__main__':
                 logo_url = stat["Logo URL"]
                 resort_website = stat["Website"]
                 trail_map_link = stat["Trail Map"]
+                description = stat["Description"]
+                id = stat["ID"]
+                resort_name = stat["Resort Name"]
 
                 newResort = {
-                    "Resort Name": resortName,
+                    "ID": id,
+                    "Resort Name": resort_name,
                     "Continent": continent,
                     "Country": country,
                     "State/Province": province_state,  
@@ -393,7 +415,8 @@ if __name__ == '__main__':
                     "Altitude": altitude,
                     "Logo URL": logo_url,  
                     "Website": resort_website, 
-                    "Trail Map": trail_map_link,  
+                    "Trail Map": trail_map_link, 
+                    "Description": description,
                     **stat,  # Include slope statistics
                     **scores,  # Include report scores
                 }
