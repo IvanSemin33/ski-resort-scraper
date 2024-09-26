@@ -1,4 +1,4 @@
-from requests import get
+from requests import Session  # Import Session from requests
 from requests.exceptions import RequestException
 from contextlib import closing
 from bs4 import BeautifulSoup, Tag
@@ -21,26 +21,22 @@ def is_good_response(resp):
             content_type is not None 
             and content_type.find('html') > -1)
 
-def get_html_content(url):
+def get_html_content(url: str) -> bytes:
     """
     Retrieve the contents of the url.
     """
-    # Be a responisble scraper.
-    time.sleep(2)
+    # Be a responsible scraper.
+    time.sleep(1)  # Reduced sleep time
 
-    # Get the html from the url
-    try:
-        with closing(get(url, stream=True)) as resp:
-            content_type = resp.headers['Content-Type'].lower()
+    # Use a session for persistent parameters
+    with Session() as session:
+        try:
+            resp = session.get(url, stream=True)
             if is_good_response(resp):
                 return resp.content
-            else:
-                # Unable to get the url responce
-                return None
-
-    except RequestException as e:
-        print('Error during requests to {0} : {1}'.format(url, str(e)))
-#        ConnectionError(ProtocolError('Connection aborted.', RemoteDisconnected('Remote end closed connection',)),)
+            return None
+        except RequestException as e:
+            print(f'Error during requests to {url}: {e}')
 
 def currencyExtraction(priceString):
     """

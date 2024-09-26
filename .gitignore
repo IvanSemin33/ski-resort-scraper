@@ -260,3 +260,4 @@ paket-files/
 __pycache__/
 *.pyc
 /SkiresortScraper/skiResort-base.xlsx
+SkiresortScraper/skiResort.xlsx
