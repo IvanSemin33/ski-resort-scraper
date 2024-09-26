@@ -7,6 +7,8 @@ import pandas as pd
 import re
 import time
 from colorama import Fore, Style, init
+import signal
+import sys
 
 init(autoreset=True)  # Initialize Colorama
 
@@ -269,72 +271,61 @@ def get_report_scores(resortUrl):
     return rating
 
 
-if __name__ == '__main__':
-    '''
-    Extract data for each ski resort and sort into relevant features.
-    '''
-    print(f"{Fore.CYAN}🚀 Starting the ski resort data scraping process...")  # Log start of the process
+# Initialize a list to hold all resort data
+resort_data_list = []
 
-    # loop through each page
-    # http://www.skiresort.info/ski-resorts/page/<index>/
-    
-    # Sk resort website url
-    url = 'https://www.skiresort.info/ski-resorts/europe/'
-    
-    # totalPages = get_number_of_pages(url)
-    totalPages = 3 # europe
-    totalResorts = 99
-
-    resortData = dict()
-    index = 0
-
-    # Initialize a list to hold all resort data
-    resort_data_list = []
-
-    for page in range(totalPages):        
-        print(f"{Fore.CYAN}📄 Scraping page {page + 1} of {totalPages}...")  # Log current page scraping
-
-        # Construct the next page with the list of ski resorts.
-        if page == 1:
-            url = url+"page/"+str(page+1)
-        elif page > 1 and page < 10:
-            url = url[:-1]+str(page+1)
-        elif page >= 10:
-            url = url[:-2]+str(page+1)
-        
-        # Get the current page contents
-        content = get_html_content(url)
-
-        # Get a list of all ski resorts on the current page
-        html = BeautifulSoup(content, 'html.parser')
-        resorts = html.find("div", {"id": "resortList"})
-
-        # Cycle through each resort
-        for index, resort in enumerate(resorts):
-            if index >= totalResorts:  # Stop after the first 3 resorts
-                break
-
-            if resort != ' ':
-                print(f"{Fore.CYAN}🔍 Processing resort {index + 1} on page {page + 1}...")  # Log current resort processing
-
-                # Get the URL for each resort
-                resortUrl = resort.find("a", {"class": "pull-right btn btn-default btn-sm"})['href']
-
-                print("Looking at Resort: ", resortUrl)  # Log the resort URL
-                
-                # Get the contents of the ski resort page.
-                stat = get_basic_resort_statistics(resortUrl)
-
-                # Add the resort data to the list
-                resort_data_list.append(stat)
-
-    print(f"{Fore.CYAN}✅ Data scraping completed. Saving to Excel...")  # Log completion of scraping
+def signal_handler(sig, frame):
+    print(f"{Fore.RED}🚨 Script interrupted! Saving data to 'skiResort.xlsx'...")  # Log interruption
     df = pd.DataFrame(resort_data_list)
     df.to_excel('skiResort.xlsx', sheet_name='sheet1', index=False)
-    print(f"{Fore.CYAN}💾 Data saved to 'skiResort.xlsx'.")  # Log data saving completion
+    print(f"{Fore.GREEN}💾 Data saved  to 'skiResort.xlsx'. Total resorts scraped: {resort_count}. Exiting...")  # Log data saving completion
+    sys.exit(0)
 
+# Register the signal handler
+signal.signal(signal.SIGINT, signal_handler)
 
+if __name__ == '__main__':
+    print(f"{Fore.CYAN}🚀 Starting the ski resort data scraping process...")
 
+    url = 'https://www.skiresort.info/ski-resorts/europe/'
+    totalPages = 3  # europe
+    totalResorts = 99
 
+    resort_count = 0  # Initialize a counter for processed resorts
 
+    for page in range(totalPages):        
+        print(f"{Fore.CYAN}📄 Scraping page {page + 1} of {totalPages}...")
 
+        # Construct the next page URL
+        if page == 0:
+            page_url = url
+        elif page == 1:
+            page_url = url + "page/" + str(page + 1)
+        else:
+            page_url = url + "page/" + str(page + 1)
+
+        content = get_html_content(page_url)
+        html = BeautifulSoup(content, 'html.parser')
+        resorts = html.find("div", {"id": "resortList"}).find_all("div", class_="resort-list-item")
+
+        for resort in resorts:
+            if resort_count >= totalResorts:
+                break
+
+            resort_link = resort.find("a", {"class": "pull-right btn btn-default btn-sm"})
+            if resort_link and 'href' in resort_link.attrs:
+                resort_count += 1
+                resortUrl = resort_link['href']
+                print(f"{Fore.CYAN}🔍 Processing resort {resort_count} on page {page + 1}...")
+                print("Looking at Resort: ", resortUrl)
+                
+                stat = get_basic_resort_statistics(resortUrl)
+                resort_data_list.append(stat)
+
+        if resort_count >= totalResorts:
+            break
+
+    print(f"{Fore.CYAN}✅ Data scraping completed. Total resorts scraped: {resort_count}. Saving to Excel...")
+    df = pd.DataFrame(resort_data_list)
+    df.to_excel('skiResort.xlsx', sheet_name='sheet1', index=False)
+    print(f"{Fore.CYAN}💾 Data saved to 'skiResort.xlsx'.")
